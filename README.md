@@ -4,9 +4,9 @@
 
 Network: `Mainnet` (56)
 
-- Templar: `0xf73EF8da76bcc7433b59bD5e6BCD07303486721d`
-- Sword: `0x4746a40188490eb578Bb3Bcf2272dCED2750F1DD`
-- BUSD Bond: `0x15567552Db0C25FABe9F46878f522D17eb0fa9d7`
+- Templar: -
+- Sword: -
+- BUSD Bond: -
 - TEM-BUSD Bond: -
 - Treasury: `0x64fa7C5aEcBA04dE6e9d8dA8465B1259ccFC2DA1`
 - BondingCalculator: `0xECbA972bAe4598BF0cf9250427D33a872c6D78f6`
