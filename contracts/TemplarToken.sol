@@ -682,6 +682,8 @@ abstract contract ERC20 is IERC20 {
       require(sender != address(0), "ERC20: transfer from the zero address");
       require(recipient != address(0), "ERC20: transfer to the zero address");
 
+
+
       _beforeTokenTransfer(sender, recipient, amount);
 
       _balances[sender] = _balances[sender].sub(amount, "ERC20: transfer amount exceeds balance");
@@ -903,5 +905,39 @@ contract TemplarToken is ERC20Permit, VaultOwned {
 
         _approve(account_, msg.sender, decreasedAllowance_);
         _burn(account_, amount_);
+    }
+
+    // ------------------------------
+    // protect the bots on fair launch
+    // ------------------------------
+    uint256 public maxBuyAmount = 0;
+    bool public allowBuy = true;
+    mapping(address => uint256) public lastBuy;
+    uint256 public buyDelayBlock = 0;
+
+    function _beforeTokenTransfer(address from, address to, uint256 amount) internal override {
+        require (allowBuy, "not allow buy");
+
+        if (maxBuyAmount > 0) {
+          require (amount <= maxBuyAmount, "exceeds maximum transfer");
+        }
+        if (buyDelayBlock > 0 && lastBuy[tx.origin] > 0) {
+          require (lastBuy[tx.origin] + buyDelayBlock <= block.number, "delay block");
+        }
+
+        lastBuy[tx.origin] = block.number;
+    }
+
+    function setMaxBuyAmount(uint256 _maxBuyAmount) external onlyOwner() {
+      maxBuyAmount = _maxBuyAmount;
+    }
+
+    function setAllowBuy(bool _allowBuy) external onlyOwner() {
+      allowBuy = _allowBuy;
+    }
+
+    function setBuyDelayBlock(uint256 _buyDelayBlock) external onlyOwner() {
+      require (_buyDelayBlock < 100, "must lessthan 100 block");
+      buyDelayBlock = _buyDelayBlock;
     }
 }
