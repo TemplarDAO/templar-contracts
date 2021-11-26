@@ -737,7 +737,7 @@ contract BondDepository is Ownable {
     
     /* ======== POLICY FUNCTIONS ======== */
 
-    enum PARAMETER { VESTING, PAYOUT, FEE, DEBT, MINPRICE }
+    enum PARAMETER { VESTING, PAYOUT, FEE, DEBT, MINPRICE, BCV }
     /**
      *  @notice set parameters for new bonds
      *  @param _parameter PARAMETER
@@ -757,6 +757,9 @@ contract BondDepository is Ownable {
             terms.maxDebt = _input;
         } else if ( _parameter == PARAMETER.MINPRICE ) { // 4
             terms.minimumPrice = _input;
+        } else if ( _parameter == PARAMETER.BCV ) { // 5
+            terms.controlVariable = _input;
+            adjustment.rate = 0;
         }
     }
 
