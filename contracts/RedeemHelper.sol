@@ -75,7 +75,7 @@ contract RedeemHelper is Ownable {
     }
 
     function addBondContract( address _bond ) external onlyPolicy() {
-        require( _bond != address(0) );
+        require( _bond != address(0), "address invalid" );
         bonds.push( _bond );
     }
 

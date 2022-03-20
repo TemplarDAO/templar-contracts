@@ -219,7 +219,7 @@ contract Treasury is Ownable {
     enum MANAGING { RESERVEDEPOSITOR, RESERVESPENDER, RESERVETOKEN, RESERVEMANAGER, LIQUIDITYDEPOSITOR, LIQUIDITYTOKEN, LIQUIDITYMANAGER, DEBTOR, REWARDMANAGER, SWORD }
 
     address public immutable TEM;
-    uint public immutable blocksNeededForQueue;
+    uint public blocksNeededForQueue;
 
     address[] public reserveTokens; // Push only, beware false-positives.
     mapping( address => bool ) public isReserveToken;
@@ -315,7 +315,7 @@ contract Treasury is Ownable {
      */
     function withdraw( uint _amount, address _token ) external {
         require( isReserveToken[ _token ], "Not accepted" ); // Only reserves can be used for redemptions
-        require( isReserveSpender[ msg.sender ] == true, "Not approved" );
+        require( isReserveSpender[ msg.sender ], "Not approved" );
 
         uint value = valueOf( _token, _amount );
         ITEMERC20( TEM ).burnFrom( msg.sender, value );
@@ -349,7 +349,7 @@ contract Treasury is Ownable {
         totalReserves = totalReserves.sub( value );
         emit ReservesUpdated( totalReserves );
 
-        IERC20( _token ).transfer( msg.sender, _amount );
+        require(IERC20( _token ).transfer( msg.sender, _amount ));
         
         emit CreateDebt( msg.sender, _token, _amount, value );
     }
@@ -649,5 +649,13 @@ contract Treasury is Ownable {
             }
         }
         return false;
+    }
+
+    /**
+        @notice set blocksNeededForQueue
+        @param _block uint256
+     */
+    function setBlocksNeededForQueue(uint256 _block) external onlyManager() {
+        blocksNeededForQueue = _block;
     }
 }

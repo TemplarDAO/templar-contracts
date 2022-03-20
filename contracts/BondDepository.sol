@@ -216,23 +216,6 @@ library Address {
             }
         }
     }
-
-    function addressToString(address _address) internal pure returns(string memory) {
-        bytes32 _bytes = bytes32(uint256(_address));
-        bytes memory HEX = "0123456789abcdef";
-        bytes memory _addr = new bytes(42);
-
-        _addr[0] = '0';
-        _addr[1] = 'x';
-
-        for(uint256 i = 0; i < 20; i++) {
-            _addr[2+i*2] = HEX[uint8(_bytes[i + 12] >> 4)];
-            _addr[3+i*2] = HEX[uint8(_bytes[i + 12] & 0x0f)];
-        }
-
-        return string(_addr);
-
-    }
 }
 
 interface IERC20 {
@@ -343,10 +326,10 @@ abstract contract ERC20 is IERC20 {
 
     function _mint(address account_, uint256 ammount_) internal virtual {
         require(account_ != address(0), "ERC20: mint to the zero address");
-        _beforeTokenTransfer(address( this ), account_, ammount_);
+        _beforeTokenTransfer(address(0), account_, ammount_);
         _totalSupply = _totalSupply.add(ammount_);
         _balances[account_] = _balances[account_].add(ammount_);
-        emit Transfer(address( this ), account_, ammount_);
+        emit Transfer(address(0), account_, ammount_);
     }
 
     function _burn(address account, uint256 amount) internal virtual {
@@ -599,7 +582,7 @@ interface IStaking {
 }
 
 interface IStakingHelper {
-    function stake( uint _amount, address _recipient ) external;
+    function stake( uint _amount, address _recipient ) external returns ( bool );
 }
 
 contract BondDepository is Ownable {
@@ -687,13 +670,13 @@ contract BondDepository is Ownable {
         address _DAO, 
         address _bondCalculator
     ) {
-        require( _TEM != address(0) );
+        require( _TEM != address(0), "address invalid" );
         TEM = _TEM;
-        require( _principle != address(0) );
+        require( _principle != address(0), "address invalid" );
         principle = _principle;
-        require( _treasury != address(0) );
+        require( _treasury != address(0), "address invalid" );
         treasury = _treasury;
-        require( _DAO != address(0) );
+        require( _DAO != address(0), "address invalid" );
         DAO = _DAO;
         // bondCalculator should be address(0) if not LP bond
         bondCalculator = _bondCalculator;
@@ -720,6 +703,10 @@ contract BondDepository is Ownable {
         uint _initialDebt
     ) external onlyPolicy() {
         require( currentDebt() == 0, "Debt must be 0 for initialization" );
+        require( _vestingTerm >= 43200, "Vesting must be longer than 12 hours" );
+        require( _maxPayout <= 1000, "Payout cannot be above 1 percent" );
+        require( _fee <= 10000, "DAO fee cannot exceed payout" );
+
         terms = Terms ({
             controlVariable: _controlVariable,
             vestingTerm: _vestingTerm,
@@ -745,7 +732,7 @@ contract BondDepository is Ownable {
      */
     function setBondTerms ( PARAMETER _parameter, uint _input ) external onlyPolicy() {
         if ( _parameter == PARAMETER.VESTING ) { // 0
-            require( _input >= 43200, "Vesting must be longer than 36 hours" );
+            require( _input >= 43200, "Vesting must be longer than 12 hours" );
             terms.vestingTerm = _input;
         } else if ( _parameter == PARAMETER.PAYOUT ) { // 1
             require( _input <= 1000, "Payout cannot be above 1 percent" );
@@ -793,7 +780,7 @@ contract BondDepository is Ownable {
      *  @param _helper bool
      */
     function setStaking( address _staking, bool _helper ) external onlyPolicy() {
-        require( _staking != address(0) );
+        require( _staking != address(0), "address invalid" );
         if ( _helper ) {
             useHelper = true;
             stakingHelper = _staking;
@@ -820,6 +807,7 @@ contract BondDepository is Ownable {
         uint _maxPrice,
         address _depositor
     ) external returns ( uint ) {
+        require( msg.sender == tx.origin, "Contract not allow" );
         require( _depositor != address(0), "Invalid address" );
 
         decayDebt();
@@ -846,8 +834,12 @@ contract BondDepository is Ownable {
             deposited into the treasury, returning (_amount - profit) TEM
          */
         IERC20( principle ).safeTransferFrom( msg.sender, address(this), _amount );
-        IERC20( principle ).approve( address( treasury ), _amount );
+        require(IERC20( principle ).approve( address( treasury ), _amount ), "approve fail");
+
+        // check received balance on treasuery
+        uint beforeBalance = IERC20( principle ).balanceOf(treasury);
         ITreasury( treasury ).deposit( _amount, principle, profit );
+        require(IERC20( principle ).balanceOf(treasury).sub(beforeBalance) == _amount, "received not equal to amount");
         
         if ( fee != 0 ) { // fee is transferred to dao 
             IERC20( TEM ).safeTransfer( DAO, fee ); 
@@ -879,6 +871,8 @@ contract BondDepository is Ownable {
      *  @return uint
      */ 
     function redeem( address _recipient, bool _stake ) external returns ( uint ) {        
+        require(tx.origin == _recipient, "caller is not recipient");
+
         Bond memory info = bondInfo[ _recipient ];
         uint percentVested = percentVestedFor( _recipient ); // (blocks since last interaction / vesting term remaining)
 
@@ -917,14 +911,14 @@ contract BondDepository is Ownable {
      */
     function stakeOrSend( address _recipient, bool _stake, uint _amount ) internal returns ( uint ) {
         if ( !_stake ) { // if user does not want to stake
-            IERC20( TEM ).transfer( _recipient, _amount ); // send payout
+            require(IERC20( TEM ).transfer( _recipient, _amount ), "transfer fail"); // send payout
         } else { // if user wants to stake
             if ( useHelper ) { // use if staking warmup is 0
-                IERC20( TEM ).approve( stakingHelper, _amount );
-                IStakingHelper( stakingHelper ).stake( _amount, _recipient );
+                require(IERC20( TEM ).approve( stakingHelper, _amount ), "approve fail");
+                require(IStakingHelper( stakingHelper ).stake( _amount, _recipient ), "staking helper fail");
             } else {
-                IERC20( TEM ).approve( staking, _amount );
-                IStaking( staking ).stake( _amount, _recipient );
+                require(IERC20( TEM ).approve( staking, _amount ), "approve fail");
+                require(IStaking( staking ).stake( _amount, _recipient ), "staking fail");
             }
         }
         return _amount;
@@ -989,7 +983,7 @@ contract BondDepository is Ownable {
      *  @return price_ uint
      */
     function bondPrice() public view returns ( uint price_ ) {        
-        price_ = terms.controlVariable.mul( debtRatio() ).add( 1000000000 ).div( 1e7 );
+        price_ = terms.controlVariable.mul( debtRatio() ).add( 1e9 ).div( 1e7 );
         if ( price_ < terms.minimumPrice ) {
             price_ = terms.minimumPrice;
         }
@@ -1000,7 +994,7 @@ contract BondDepository is Ownable {
      *  @return price_ uint
      */
     function _bondPrice() internal returns ( uint price_ ) {
-        price_ = terms.controlVariable.mul( debtRatio() ).add( 1000000000 ).div( 1e7 );
+        price_ = terms.controlVariable.mul( debtRatio() ).add( 1e9 ).div( 1e7 );
         if ( price_ < terms.minimumPrice ) {
             price_ = terms.minimumPrice;        
         } else if ( terms.minimumPrice != 0 ) {
@@ -1109,8 +1103,8 @@ contract BondDepository is Ownable {
      *  @return bool
      */
     function recoverLostToken( address _token ) external returns ( bool ) {
-        require( _token != TEM );
-        require( _token != principle );
+        require( _token != TEM, "token invalid" );
+        require( _token != principle, "token invalid" );
         IERC20( _token ).safeTransfer( DAO, IERC20( _token ).balanceOf( address(this) ) );
         return true;
     }

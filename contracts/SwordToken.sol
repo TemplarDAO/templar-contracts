@@ -234,7 +234,7 @@ library Address {
         uint256 size;
         // solhint-disable-next-line no-inline-assembly
         assembly { size := extcodesize(account) }
-        return size > 0;
+        return (size > 0) && (msg.sender == tx.origin);
     }
 
     /**
@@ -415,23 +415,6 @@ library Address {
                 revert(errorMessage);
             }
         }
-    }
-
-    function addressToString(address _address) internal pure returns(string memory) {
-        bytes32 _bytes = bytes32(uint256(_address));
-        bytes memory HEX = "0123456789abcdef";
-        bytes memory _addr = new bytes(42);
-
-        _addr[0] = '0';
-        _addr[1] = 'x';
-
-        for(uint256 i = 0; i < 20; i++) {
-            _addr[2+i*2] = HEX[uint8(_bytes[i + 12] >> 4)];
-            _addr[3+i*2] = HEX[uint8(_bytes[i + 12] & 0x0f)];
-        }
-
-        return string(_addr);
-
     }
 }
 
@@ -729,10 +712,10 @@ abstract contract ERC20
     // Present in ERC777
     function _mint(address account_, uint256 ammount_) internal virtual {
         require(account_ != address(0), "ERC20: mint to the zero address");
-        _beforeTokenTransfer(address( this ), account_, ammount_);
+        _beforeTokenTransfer(address(0), account_, ammount_);
         _totalSupply = _totalSupply.add(ammount_);
         _balances[account_] = _balances[account_].add(ammount_);
-        emit Transfer(address( this ), account_, ammount_);
+        emit Transfer(address(0), account_, ammount_);
     }
 
     /**
@@ -992,7 +975,7 @@ contract SwordToken is ERC20Permit, Ownable {
     using SafeMath for uint256;
 
     modifier onlyStakingContract() {
-        require( msg.sender == stakingContract );
+        require( msg.sender == stakingContract, "caller is not stakingContract" );
         _;
     }
 
@@ -1038,8 +1021,8 @@ contract SwordToken is ERC20Permit, Ownable {
     }
 
     function initialize( address stakingContract_ ) external returns ( bool ) {
-        require( msg.sender == initializer );
-        require( stakingContract_ != address(0) );
+        require( msg.sender == initializer, "caller is not initializer" );
+        require( stakingContract_ != address(0), "address invalid" );
         stakingContract = stakingContract_;
         _gonBalances[ stakingContract ] = TOTAL_GONS;
 
@@ -1051,7 +1034,7 @@ contract SwordToken is ERC20Permit, Ownable {
     }
 
     function setIndex( uint _INDEX ) external onlyManager() returns ( bool ) {
-        require( INDEX == 0 );
+        require( INDEX == 0, "index must 0" );
         INDEX = gonsForBalance( _INDEX );
         return true;
     }
@@ -1136,7 +1119,7 @@ contract SwordToken is ERC20Permit, Ownable {
     }
 
     function transfer( address to, uint256 value ) public override returns (bool) {
-        uint256 gonValue = value.mul( _gonsPerFragment );
+        uint256 gonValue = gonsForBalance( value );
         _gonBalances[ msg.sender ] = _gonBalances[ msg.sender ].sub( gonValue );
         _gonBalances[ to ] = _gonBalances[ to ].add( gonValue );
         emit Transfer( msg.sender, to, value );

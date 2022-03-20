@@ -268,7 +268,7 @@ contract BondingCalculator is IBondingCalculator {
     address public immutable TEM;
 
     constructor( address _TEM ) {
-        require( _TEM != address(0) );
+        require( _TEM != address(0), "address invalid" );
         TEM = _TEM;
     }
 
@@ -299,6 +299,7 @@ contract BondingCalculator is IBondingCalculator {
         if ( IUniswapV2Pair( _pair ).token0() == TEM ) {
             reserve = reserve1;
         } else {
+            require( IUniswapV2Pair( _pair ).token1() == TEM, "INVALID_TOKEN");
             reserve = reserve0;
         }
         return reserve.mul( 2 * ( 10 ** IERC20( TEM ).decimals() ) ).div( getTotalValue( _pair ) );

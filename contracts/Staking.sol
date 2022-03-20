@@ -568,9 +568,9 @@ contract Staking is Ownable {
         uint _firstEpochNumber,
         uint _firstEpochBlock
     ) {
-        require( _TEM != address(0) );
+        require( _TEM != address(0), "address invalid" );
         TEM = _TEM;
-        require( _SWORD != address(0) );
+        require( _SWORD != address(0), "address invalid" );
         SWORD = _SWORD;
         
         epoch = Epoch({
@@ -615,13 +615,12 @@ contract Staking is Ownable {
 
     /**
         @notice retrieve SWORD from warmup
-        @param _recipient address
      */
-    function claim ( address _recipient ) public {
-        Claim memory info = warmupInfo[ _recipient ];
+    function claim () public {
+        Claim memory info = warmupInfo[ msg.sender ];
         if ( epoch.number >= info.expiry && info.expiry != 0 ) {
-            delete warmupInfo[ _recipient ];
-            IWarmup( warmupContract ).retrieve( _recipient, ISWORD( SWORD ).balanceForGons( info.gons ) );
+            delete warmupInfo[ msg.sender ];
+            IWarmup( warmupContract ).retrieve( msg.sender, ISWORD( SWORD ).balanceForGons( info.gons ) );
         }
     }
 
@@ -703,7 +702,7 @@ contract Staking is Ownable {
         @param _amount uint
      */
     function giveLockBonus( uint _amount ) external {
-        require( msg.sender == locker );
+        require( msg.sender == locker, "caller is not locker" );
         totalBonus = totalBonus.add( _amount );
         IERC20( SWORD ).safeTransfer( locker, _amount );
     }
@@ -713,7 +712,7 @@ contract Staking is Ownable {
         @param _amount uint
      */
     function returnLockBonus( uint _amount ) external {
-        require( msg.sender == locker );
+        require( msg.sender == locker, "caller is not locker" );
         totalBonus = totalBonus.sub( _amount );
         IERC20( SWORD ).safeTransferFrom( locker, address(this), _amount );
     }

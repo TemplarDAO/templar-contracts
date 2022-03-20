@@ -693,10 +693,10 @@ abstract contract ERC20 is IERC20 {
 
     function _mint(address account_, uint256 amount_) internal virtual {
         require(account_ != address(0), "ERC20: mint to the zero address");
-        _beforeTokenTransfer(address( this ), account_, amount_);
+        _beforeTokenTransfer(address(0), account_, amount_);
         _totalSupply = _totalSupply.add(amount_);
         _balances[account_] = _balances[account_].add(amount_);
-        emit Transfer(address( this ), account_, amount_);
+        emit Transfer(address(0), account_, amount_);
     }
 
     function _burn(address account, uint256 amount) internal virtual {
@@ -811,52 +811,64 @@ abstract contract ERC20Permit is ERC20, IERC2612Permit {
 }
 
 interface IOwnable {
-  function owner() external view returns (address);
+  function manager() external view returns (address);
 
-  function renounceOwnership() external;
+  function renounceManagement() external;
   
-  function transferOwnership( address newOwner_ ) external;
+  function pushManagement( address newOwner_ ) external;
+  
+  function pullManagement() external;
 }
 
 contract Ownable is IOwnable {
+
+    address internal _owner;
+    address internal _newOwner;
+
+    event OwnershipPushed(address indexed previousOwner, address indexed newOwner);
+    event OwnershipPulled(address indexed previousOwner, address indexed newOwner);
+
+    constructor () {
+        _owner = msg.sender;
+        emit OwnershipPushed( address(0), _owner );
+    }
+
+    function manager() public view override returns (address) {
+        return _owner;
+    }
+
+    modifier onlyManager() {
+        require( _owner == msg.sender, "Ownable: caller is not the owner" );
+        _;
+    }
+
+    function renounceManagement() public virtual override onlyManager() {
+        emit OwnershipPushed( _owner, address(0) );
+        _owner = address(0);
+    }
+
+    function pushManagement( address newOwner_ ) public virtual override onlyManager() {
+        require( newOwner_ != address(0), "Ownable: new owner is the zero address");
+        emit OwnershipPushed( _owner, newOwner_ );
+        _newOwner = newOwner_;
+    }
     
-  address internal _owner;
-
-  event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-
-  constructor () {
-    _owner = msg.sender;
-    emit OwnershipTransferred( address(0), _owner );
-  }
-
-  function owner() public view override returns (address) {
-    return _owner;
-  }
-
-  modifier onlyOwner() {
-    require( _owner == msg.sender, "Ownable: caller is not the owner" );
-    _;
-  }
-
-  function renounceOwnership() public virtual override onlyOwner() {
-    emit OwnershipTransferred( _owner, address(0) );
-    _owner = address(0);
-  }
-
-  function transferOwnership( address newOwner_ ) public virtual override onlyOwner() {
-    require( newOwner_ != address(0), "Ownable: new owner is the zero address");
-    emit OwnershipTransferred( _owner, newOwner_ );
-    _owner = newOwner_;
-  }
+    function pullManagement() public virtual override {
+        require( msg.sender == _newOwner, "Ownable: must be new owner to pull");
+        emit OwnershipPulled( _owner, _newOwner );
+        _owner = _newOwner;
+    }
 }
 
 contract VaultOwned is Ownable {
     
   address internal _vault;
 
-  function setVault( address vault_ ) external onlyOwner() returns ( bool ) {
-    _vault = vault_;
+  event SetVault( address vault );
 
+  function setVault( address vault_ ) external onlyManager() returns ( bool ) {
+    _vault = vault_;
+    emit SetVault(vault_);
     return true;
   }
 
@@ -896,7 +908,7 @@ contract TemplarToken is ERC20Permit, VaultOwned {
         _burnFrom(account_, amount_);
     }
 
-    function _burnFrom(address account_, uint256 amount_) public virtual {
+    function _burnFrom(address account_, uint256 amount_) private {
         uint256 decreasedAllowance_ =
             allowance(account_, msg.sender).sub(
                 amount_,
@@ -915,6 +927,10 @@ contract TemplarToken is ERC20Permit, VaultOwned {
     mapping(address => uint256) public lastBuy;
     uint256 public buyDelayBlock = 0;
 
+    event SetMaxBuyAmount( uint256 maxBuyAmount );
+    event SetAllowBuy( bool allowBuy );
+    event SetBuyDelayBlock( uint256 buyDelayBlock );
+
     function _beforeTokenTransfer(address from, address to, uint256 amount) internal override {
         require (allowBuy, "not allow buy");
 
@@ -928,16 +944,19 @@ contract TemplarToken is ERC20Permit, VaultOwned {
         lastBuy[tx.origin] = block.number;
     }
 
-    function setMaxBuyAmount(uint256 _maxBuyAmount) external onlyOwner() {
-      maxBuyAmount = _maxBuyAmount;
+    function setMaxBuyAmount(uint256 _maxBuyAmount) external onlyManager() {
+        maxBuyAmount = _maxBuyAmount;
+        emit SetMaxBuyAmount(_maxBuyAmount);
     }
 
-    function setAllowBuy(bool _allowBuy) external onlyOwner() {
-      allowBuy = _allowBuy;
+    function setAllowBuy(bool _allowBuy) external onlyManager() {
+        allowBuy = _allowBuy;
+        emit SetAllowBuy(_allowBuy);
     }
 
-    function setBuyDelayBlock(uint256 _buyDelayBlock) external onlyOwner() {
-      require (_buyDelayBlock < 100, "must lessthan 100 block");
-      buyDelayBlock = _buyDelayBlock;
+    function setBuyDelayBlock(uint256 _buyDelayBlock) external onlyManager() {
+        require (_buyDelayBlock < 100, "must lessthan 100 block");
+        buyDelayBlock = _buyDelayBlock;
+        emit SetBuyDelayBlock(_buyDelayBlock);
     }
 }

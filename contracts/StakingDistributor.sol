@@ -255,23 +255,6 @@ library Address {
             }
         }
     }
-
-    function addressToString(address _address) internal pure returns(string memory) {
-        bytes32 _bytes = bytes32(uint256(_address));
-        bytes memory HEX = "0123456789abcdef";
-        bytes memory _addr = new bytes(42);
-
-        _addr[0] = '0';
-        _addr[1] = 'x';
-
-        for(uint256 i = 0; i < 20; i++) {
-            _addr[2+i*2] = HEX[uint8(_bytes[i + 12] >> 4)];
-            _addr[3+i*2] = HEX[uint8(_bytes[i + 12] & 0x0f)];
-        }
-
-        return string(_addr);
-
-    }
 }
 
 
@@ -318,7 +301,7 @@ contract Policy is IPolicy {
     }
 
     function pullPolicy() public virtual override {
-        require( msg.sender == _newPolicy );
+        require( msg.sender == _newPolicy, "Ownable: caller is not new owner" );
         emit OwnershipTransferred( _policy, _newPolicy );
         _policy = _newPolicy;
     }
@@ -364,9 +347,9 @@ contract Distributor is Policy {
     /* ====== CONSTRUCTOR ====== */
 
     constructor( address _treasury, address _tem, uint _epochLength, uint _nextEpochBlock ) {        
-        require( _treasury != address(0) );
+        require( _treasury != address(0), "address invalid" );
         treasury = _treasury;
-        require( _tem != address(0) );
+        require( _tem != address(0), "address invalid" );
         TEM = _tem;
         epochLength = _epochLength;
         nextEpochBlock = _nextEpochBlock;
@@ -461,7 +444,7 @@ contract Distributor is Policy {
         @param _rewardRate uint
      */
     function addRecipient( address _recipient, uint _rewardRate ) external onlyPolicy() {
-        require( _recipient != address(0) );
+        require( _recipient != address(0), "address invalid" );
         info.push( Info({
             recipient: _recipient,
             rate: _rewardRate
@@ -474,7 +457,7 @@ contract Distributor is Policy {
         @param _recipient address
      */
     function removeRecipient( uint _index, address _recipient ) external onlyPolicy() {
-        require( _recipient == info[ _index ].recipient );
+        require( _recipient == info[ _index ].recipient, "not have recipient" );
         info[ _index ].recipient = address(0);
         info[ _index ].rate = 0;
     }

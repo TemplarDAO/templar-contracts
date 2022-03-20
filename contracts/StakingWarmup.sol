@@ -80,14 +80,14 @@ contract StakingWarmup {
     address public immutable SWORD;
 
     constructor ( address _staking, address _SWORD ) {
-        require( _staking != address(0) );
+        require( _staking != address(0), "address invalid" );
         staking = _staking;
-        require( _SWORD != address(0) );
+        require( _SWORD != address(0), "address invalid" );
         SWORD = _SWORD;
     }
 
     function retrieve( address _staker, uint _amount ) external {
-        require( msg.sender == staking );
+        require( msg.sender == staking, "caller is not staking" );
         IERC20( SWORD ).transfer( _staker, _amount );
     }
 }

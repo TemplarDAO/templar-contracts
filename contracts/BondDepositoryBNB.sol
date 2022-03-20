@@ -216,23 +216,6 @@ library Address {
             }
         }
     }
-
-    function addressToString(address _address) internal pure returns(string memory) {
-        bytes32 _bytes = bytes32(uint256(_address));
-        bytes memory HEX = "0123456789abcdef";
-        bytes memory _addr = new bytes(42);
-
-        _addr[0] = '0';
-        _addr[1] = 'x';
-
-        for(uint256 i = 0; i < 20; i++) {
-            _addr[2+i*2] = HEX[uint8(_bytes[i + 12] >> 4)];
-            _addr[3+i*2] = HEX[uint8(_bytes[i + 12] & 0x0f)];
-        }
-
-        return string(_addr);
-
-    }
 }
 
 interface IERC20 {
@@ -632,7 +615,7 @@ interface IStaking {
 }
 
 interface IStakingHelper {
-    function stake( uint _amount, address _recipient ) external;
+    function stake( uint _amount, address _recipient ) external returns ( bool );
 }
 
 interface IWBNB is IERC20 {
@@ -724,15 +707,15 @@ contract BondDepository is Ownable {
         address _DAO, 
         address _feed
     ) {
-        require( _TEM != address(0) );
+        require( _TEM != address(0), "address invalid" );
         TEM = _TEM;
-        require( _principle != address(0) );
+        require( _principle != address(0), "address invalid" );
         principle = _principle;
-        require( _treasury != address(0) );
+        require( _treasury != address(0), "address invalid" );
         treasury = _treasury;
-        require( _DAO != address(0) );
+        require( _DAO != address(0), "address invalid" );
         DAO = _DAO;
-        require( _feed != address(0) );
+        require( _feed != address(0), "address invalid" );
         priceFeed = AggregatorV3Interface( _feed );
     }
 
@@ -778,7 +761,7 @@ contract BondDepository is Ownable {
      */
     function setBondTerms ( PARAMETER _parameter, uint _input ) external onlyPolicy() {
         if ( _parameter == PARAMETER.VESTING ) { // 0
-            require( _input >= 43200, "Vesting must be longer than 36 hours" );
+            require( _input >= 43200, "Vesting must be longer than 12 hours" );
             terms.vestingTerm = _input;
         } else if ( _parameter == PARAMETER.PAYOUT ) { // 1
             require( _input <= 1000, "Payout cannot be above 1 percent" );
@@ -825,7 +808,7 @@ contract BondDepository is Ownable {
      *  @param _helper bool
      */
     function setStaking( address _staking, bool _helper ) external onlyPolicy() {
-        require( _staking != address(0) );
+        require( _staking != address(0), "address invalid" );
         if ( _helper ) {
             useHelper = true;
             stakingHelper = _staking;
@@ -852,6 +835,7 @@ contract BondDepository is Ownable {
         uint _maxPrice,
         address _depositor
     ) external payable returns ( uint ) {
+        require( msg.sender == tx.origin, "Contract not allow" );
         require( _depositor != address(0), "Invalid address" );
 
         decayDebt();
@@ -875,7 +859,7 @@ contract BondDepository is Ownable {
         if (address(this).balance >= _amount) {
             // pay with WBNB
             IWBNB(principle).deposit{value: _amount}(); // wrap only what is needed to pay
-            IWBNB(principle).transfer(treasury, _amount);
+            require(IWBNB(principle).transfer(treasury, _amount), "transfer fail");
         } else {
             IERC20( principle ).safeTransferFrom( msg.sender, treasury, _amount );
         }
@@ -908,7 +892,9 @@ contract BondDepository is Ownable {
      *  @param _stake bool
      *  @return uint
      */ 
-    function redeem( address _recipient, bool _stake ) external returns ( uint ) {        
+    function redeem( address _recipient, bool _stake ) external returns ( uint ) {      
+        require(tx.origin == _recipient, "caller is not recipient");
+          
         Bond memory info = bondInfo[ _recipient ];
         uint percentVested = percentVestedFor( _recipient ); // (blocks since last interaction / vesting term remaining)
 
@@ -947,14 +933,14 @@ contract BondDepository is Ownable {
      */
     function stakeOrSend( address _recipient, bool _stake, uint _amount ) internal returns ( uint ) {
         if ( !_stake ) { // if user does not want to stake
-            IERC20( TEM ).transfer( _recipient, _amount ); // send payout
+            require(IERC20( TEM ).transfer( _recipient, _amount ), "transfer fail"); // send payout
         } else { // if user wants to stake
             if ( useHelper ) { // use if staking warmup is 0
-                IERC20( TEM ).approve( stakingHelper, _amount );
-                IStakingHelper( stakingHelper ).stake( _amount, _recipient );
+                require(IERC20( TEM ).approve( stakingHelper, _amount ), "approve fail");
+                require(IStakingHelper( stakingHelper ).stake( _amount, _recipient ), "staking helper fail");
             } else {
-                IERC20( TEM ).approve( staking, _amount );
-                IStaking( staking ).stake( _amount, _recipient );
+                require(IERC20( TEM ).approve( staking, _amount ), "approve fail");
+                require(IStaking( staking ).stake( _amount, _recipient ), "staking fail");
             }
         }
         return _amount;
@@ -1139,8 +1125,8 @@ contract BondDepository is Ownable {
      *  @return bool
      */
     function recoverLostToken( address _token ) external returns ( bool ) {
-        require( _token != TEM );
-        require( _token != principle );
+        require( _token != TEM, "token invalid" );
+        require( _token != principle, "token invalid" );
         IERC20( _token ).safeTransfer( DAO, IERC20( _token ).balanceOf( address(this) ) );
         return true;
     }

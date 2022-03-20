@@ -85,16 +85,17 @@ contract StakingHelper {
     address public immutable TEM;
 
     constructor ( address _staking, address _TEM ) {
-        require( _staking != address(0) );
+        require( _staking != address(0), "address invalid" );
         staking = _staking;
-        require( _TEM != address(0) );
+        require( _TEM != address(0), "address invalid" );
         TEM = _TEM;
     }
     
-    function stake( uint _amount, address recipient ) external {
-        IERC20( TEM ).transferFrom( msg.sender, address(this), _amount );
-        IERC20( TEM ).approve( staking, _amount );
-        IStaking( staking ).stake( _amount, recipient );
+    function stake( uint _amount, address recipient ) external returns ( bool ) {
+        require(IERC20( TEM ).transferFrom( msg.sender, address(this), _amount ), "transfer fail");
+        require(IERC20( TEM ).approve( staking, _amount ), "approve fail");
+        require(IStaking( staking ).stake( _amount, recipient ), "staking fail");
         IStaking( staking ).claim( recipient );
+        return true;
     }
 }
